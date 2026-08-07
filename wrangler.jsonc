@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "inoiizy-tic-tac-toe",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-04",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOMS",
+        "class_name": "GameRoom"
+      },
+      {
+        "name": "DUEL_STATS",
+        "class_name": "DuelStats"
+      }
+    ]
+  },
+  "exports": {
+    "GameRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "DuelStats": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "routes": [
+    {
+      "pattern": "elija.me/iNoiizY/TicTacToe*",
+      "zone_name": "elija.me"
+    },
+    {
+      "pattern": "elija.me/iNoiizy/TicTacToe*",
+      "zone_name": "elija.me"
+    }
+  ]
+}

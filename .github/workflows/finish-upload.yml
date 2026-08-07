@@ -1,0 +1,33 @@
+name: Finish project upload
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public/iNoiizY/TicTacToe/assets
+          curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/background.webp --output public/iNoiizY/TicTacToe/assets/background.webp
+          curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/computer.webp --output public/iNoiizY/TicTacToe/assets/computer.webp
+          curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/player.webp --output public/iNoiizY/TicTacToe/assets/player.webp
+          rm .github/workflows/finish-upload.yml
+          rmdir .github/workflows .github 2>/dev/null || true
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add image assets"
+          git push origin main

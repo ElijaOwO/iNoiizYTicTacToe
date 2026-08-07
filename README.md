@@ -1,2 +1,1 @@
-# iNoiizYTicTacToe
 Small website w/ online integration for a german streamer. Available at https://elija.me/iNoiizY/TicTacToe/

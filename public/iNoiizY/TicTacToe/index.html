@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ec3f94">
+    <meta name="description" content="Spiele Tic Tac Toe gegen den Computer oder online.">
+    <title>iNoiizY Tic Tac Toe</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <main class="game-shell" aria-label="Tic Tac Toe">
+      <aside class="duel-history" id="duel-history" aria-live="polite" hidden>
+        <span class="duel-history-title">Gesamtduell</span>
+        <strong class="duel-history-score">
+          <span id="duel-x-wins">0</span><span aria-hidden="true">:</span><span id="duel-o-wins">0</span>
+        </strong>
+        <span class="duel-history-names" id="duel-history-names">Spieler X gegen Spieler O</span>
+        <span class="duel-history-meta" id="duel-history-meta">0 Unentschieden · 0 Runden</span>
+      </aside>
+
+      <section class="game-card" aria-label="Tic Tac Toe Spiel">
+        <h1 class="visually-hidden">iNoiizY Tic Tac Toe</h1>
+
+        <div class="mode-switch" role="group" aria-label="Spielmodus">
+          <button class="mode-button is-active" id="local-mode" type="button" aria-pressed="true">Computer</button>
+          <button class="mode-button" id="online-mode" type="button" aria-pressed="false">Online</button>
+        </div>
+
+        <section class="online-panel" id="online-panel" aria-label="Online-Spiel" hidden>
+          <div class="username-field" id="username-field">
+            <label for="username-input">Dein Benutzername</label>
+            <input
+              id="username-input"
+              name="username"
+              type="text"
+              autocomplete="nickname"
+              maxlength="18"
+              placeholder="Dein Name"
+              aria-describedby="username-help"
+              required
+            >
+            <span class="form-help" id="username-help">2–18 Zeichen. Der andere Spieler sieht deinen Namen.</span>
+          </div>
+
+          <div class="online-lobby" id="online-lobby">
+            <button class="secondary-button" id="create-room" type="button">Raum erstellen</button>
+            <span class="lobby-divider" aria-hidden="true">oder</span>
+            <form class="join-form" id="join-form">
+              <label for="room-input">Raumcode</label>
+              <div class="join-row">
+                <input
+                  id="room-input"
+                  name="room"
+                  type="password"
+                  inputmode="text"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  maxlength="6"
+                  pattern="[A-HJ-NP-Za-hj-np-z2-9]{6}"
+                  placeholder="ABC234"
+                  aria-describedby="room-help"
+                  required
+                >
+                <button class="secondary-button" id="join-room" type="submit">Beitreten</button>
+              </div>
+              <span class="form-help" id="room-help">6 Zeichen</span>
+            </form>
+          </div>
+
+          <div class="room-panel" id="room-panel" hidden>
+            <div class="room-meta">
+              <label class="room-code-wrap" for="room-code">
+                <span>Raum</span>
+                <input
+                  class="room-code-secret"
+                  id="room-code"
+                  type="password"
+                  value=""
+                  autocomplete="off"
+                  aria-label="Verdeckter Raumcode"
+                  readonly
+                >
+              </label>
+              <span>Du spielst <strong id="player-role">–</strong></span>
+              <span class="connection-state" id="connection-state">Verbinde …</span>
+            </div>
+            <div class="room-actions">
+              <button class="small-button" id="copy-code" type="button">Code kopieren</button>
+              <button class="small-button" id="copy-link" type="button">Link kopieren</button>
+              <button class="small-button is-quiet" id="leave-room" type="button">Raum verlassen</button>
+            </div>
+          </div>
+
+          <p class="online-error" id="online-error" role="alert" hidden></p>
+        </section>
+
+        <div class="scoreboard" aria-label="Punktestand">
+          <div class="score-side" id="left-score-side">
+            <span class="score-label" id="left-score-label">Du</span>
+            <strong id="left-score" aria-label="Punkte links">0</strong>
+          </div>
+          <span class="score-separator" aria-hidden="true">:</span>
+          <div class="score-side" id="right-score-side">
+            <span class="score-label" id="right-score-label">Computer</span>
+            <strong id="right-score" aria-label="Punkte rechts">0</strong>
+          </div>
+        </div>
+
+        <p class="status" id="status" aria-live="polite">Du bist dran</p>
+
+        <div class="board" id="board" role="grid" aria-label="Tic Tac Toe Spielfeld">
+          <button class="cell" type="button" data-cell="0" role="gridcell" aria-label="Feld oben links"></button>
+          <button class="cell" type="button" data-cell="1" role="gridcell" aria-label="Feld oben mittig"></button>
+          <button class="cell" type="button" data-cell="2" role="gridcell" aria-label="Feld oben rechts"></button>
+          <button class="cell" type="button" data-cell="3" role="gridcell" aria-label="Feld Mitte links"></button>
+          <button class="cell" type="button" data-cell="4" role="gridcell" aria-label="Feld Mitte"></button>
+          <button class="cell" type="button" data-cell="5" role="gridcell" aria-label="Feld Mitte rechts"></button>
+          <button class="cell" type="button" data-cell="6" role="gridcell" aria-label="Feld unten links"></button>
+          <button class="cell" type="button" data-cell="7" role="gridcell" aria-label="Feld unten mittig"></button>
+          <button class="cell" type="button" data-cell="8" role="gridcell" aria-label="Feld unten rechts"></button>
+        </div>
+
+        <button class="primary-button" id="new-round" type="button">Neue Runde</button>
+      </section>
+    </main>
+    <footer class="site-credit">made by elija</footer>
+  </body>
+</html>

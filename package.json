@@ -1,0 +1,17 @@
+{
+  "name": "inoiizy-tic-tac-toe",
+  "version": "1.6.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check public/iNoiizY/TicTacToe/app.js && node --check src/worker.js && node test/frontend.test.mjs && node test/worker.test.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "wrangler": "4.118.0"
+  }
+}
