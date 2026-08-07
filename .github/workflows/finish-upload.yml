@@ -13,89 +13,120 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Move images
+      - name: Update image links
         shell: bash
         run: |
           set -euo pipefail
-
-          download_image() {
-            file="$1"
-            shift
-            for url in "$@"; do
-              if curl --fail --location --silent --show-error "$url" --output "/tmp/$file"; then
-                return 0
-              fi
-            done
-            echo "Could not download $file" >&2
-            exit 1
-          }
-
-          download_image background.webp \
-            "https://elija.me/iNoiizY/TicTacToe/assets/background.webp" \
-            "https://elija.me/iNoiizY/TicTacToe/background.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/assets/background.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/background.webp"
-
-          download_image player.webp \
-            "https://elija.me/iNoiizY/TicTacToe/assets/player.webp" \
-            "https://elija.me/iNoiizY/TicTacToe/player.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/assets/player.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/player.webp"
-
-          download_image computer.webp \
-            "https://elija.me/iNoiizY/TicTacToe/assets/computer.webp" \
-            "https://elija.me/iNoiizY/TicTacToe/computer.webp" \
-            "https://elija.me/iNoiizY/TicTacToe/assets/ai.webp" \
-            "https://elija.me/iNoiizY/TicTacToe/ai.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/assets/computer.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/computer.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/assets/ai.webp" \
-            "https://elija.me/iNoiizy/TicTacToe/ai.webp"
-
-          upload_image() {
-            curl --fail --silent --show-error \
-              -F "reqtype=fileupload" \
-              -F "fileToUpload=@/tmp/$1" \
-              https://catbox.moe/user/api.php
-          }
-
-          BG_URL="$(upload_image background.webp)"
-          PLAYER_URL="$(upload_image player.webp)"
-          COMPUTER_URL="$(upload_image computer.webp)"
-
-          for url in "$BG_URL" "$PLAYER_URL" "$COMPUTER_URL"; do
-            case "$url" in
-              https://files.catbox.moe/*) ;;
-              *) echo "Unexpected upload result: $url" >&2; exit 1 ;;
-            esac
-          done
-
-          export BG_URL PLAYER_URL COMPUTER_URL
-
           python3 <<'PY'
-          import os
+          import hashlib
+          import html
+          import re
+          import shutil
+          import urllib.parse
+          import urllib.request
           from pathlib import Path
 
-          root = Path("public/iNoiizY/TicTacToe")
-          app_path = root / "app.js"
-          css_path = root / "styles.css"
+          pages = [
+              "https://ibb.co/Y7cWY0Pr",
+              "https://ibb.co/FLB7WXwJ",
+              "https://ibb.co/Pzsx7KXD",
+          ]
+
+          def get(url):
+              request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return response.read()
+
+          def page_info(url):
+              text = get(url).decode("utf-8", "replace")
+              patterns = [
+                  r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+                  r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+                  r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
+              ]
+              direct = None
+              for pattern in patterns:
+                  match = re.search(pattern, text, re.I)
+                  if match:
+                      direct = html.unescape(match.group(1))
+                      break
+              if not direct:
+                  raise RuntimeError(f"Kein Direktlink auf {url} gefunden")
+              title_match = re.search(r'<title[^>]*>(.*?)</title>', text, re.I | re.S)
+              title = html.unescape(title_match.group(1)).strip() if title_match else ""
+              return {"page": url, "direct": direct, "title": title, "data": get(direct)}
+
+          images = [page_info(url) for url in pages]
+          slots = {}
+
+          for image in images:
+              name = (image["title"] + " " + urllib.parse.urlsplit(image["direct"]).path).lower()
+              if "background" in name or "hintergrund" in name:
+                  slots["background"] = image
+              elif "player" in name or "spieler" in name:
+                  slots["player"] = image
+              elif "computer" in name or re.search(r'(^|[^a-z])ai([^a-z]|$)', name):
+                  slots["computer"] = image
+
+          live_candidates = {
+              "background": [
+                  "https://elija.me/iNoiizY/TicTacToe/assets/background.webp",
+                  "https://elija.me/iNoiizY/TicTacToe/background.webp",
+              ],
+              "player": [
+                  "https://elija.me/iNoiizY/TicTacToe/assets/player.webp",
+                  "https://elija.me/iNoiizY/TicTacToe/player.webp",
+              ],
+              "computer": [
+                  "https://elija.me/iNoiizY/TicTacToe/assets/computer.webp",
+                  "https://elija.me/iNoiizY/TicTacToe/computer.webp",
+                  "https://elija.me/iNoiizY/TicTacToe/assets/ai.webp",
+                  "https://elija.me/iNoiizY/TicTacToe/ai.webp",
+              ],
+          }
+
+          image_hashes = {hashlib.sha256(image["data"]).hexdigest(): image for image in images}
+          for slot, urls in live_candidates.items():
+              if slot in slots:
+                  continue
+              for url in urls:
+                  try:
+                      live_hash = hashlib.sha256(get(url)).hexdigest()
+                  except Exception:
+                      continue
+                  if live_hash in image_hashes:
+                      slots[slot] = image_hashes[live_hash]
+                      break
+
+          remaining_images = [image for image in images if image not in slots.values()]
+          for slot in ["background", "player", "computer"]:
+              if slot not in slots and remaining_images:
+                  slots[slot] = remaining_images.pop(0)
+
+          if len({slots[slot]["direct"] for slot in slots}) != 3:
+              raise RuntimeError("Die drei Bilder konnten nicht eindeutig zugeordnet werden")
+
+          app_path = Path("public/iNoiizY/TicTacToe/app.js")
+          css_path = Path("public/iNoiizY/TicTacToe/styles.css")
           headers_path = Path("public/_headers")
           test_path = Path("test/frontend.test.mjs")
 
           app = app_path.read_text()
-          app = app.replace('"./assets/player.webp"', f'"{os.environ["PLAYER_URL"]}"')
-          app = app.replace('"./assets/computer.webp"', f'"{os.environ["COMPUTER_URL"]}"')
+          app = app.replace('"./assets/player.webp"', f'"{slots["player"]["direct"]}"')
+          app = app.replace('"./assets/computer.webp"', f'"{slots["computer"]["direct"]}"')
           app_path.write_text(app)
 
           css = css_path.read_text()
-          css = css.replace('url("./assets/background.webp")', f'url("{os.environ["BG_URL"]}")')
+          css = css.replace('url("./assets/background.webp")', f'url("{slots["background"]["direct"]}")')
           css_path.write_text(css)
 
+          origins = sorted({
+              f'{urllib.parse.urlsplit(image["direct"]).scheme}://{urllib.parse.urlsplit(image["direct"]).netloc}'
+              for image in slots.values()
+          })
           headers = headers_path.read_text()
-          headers = headers.replace(
-              "img-src 'self' data:;",
-              "img-src 'self' https://files.catbox.moe data:;"
-          )
+          image_sources = " ".join(origins)
+          headers = headers.replace("img-src 'self' data:;", f"img-src 'self' {image_sources} data:;")
           headers_path.write_text(headers)
 
           test = test_path.read_text()
@@ -103,31 +134,32 @@ jobs:
               'import { access, readFile } from "node:fs/promises";',
               'import { readFile } from "node:fs/promises";'
           )
-          test = test.replace(
-              'await access(new URL("public/iNoiizY/TicTacToe/assets/computer.webp", root));\n'
-              'await assert.rejects(access(new URL("public/iNoiizY/TicTacToe/assets/ai.webp", root)));',
-              'assert.match(js, /https:\\/\\/files\\.catbox\\.moe\\/[A-Za-z0-9]+\\.webp/);\n'
-              'assert.match(css, /https:\\/\\/files\\.catbox\\.moe\\/[A-Za-z0-9]+\\.webp/);'
+          test = re.sub(
+              r'\nawait access\(new URL\("public/iNoiizY/TicTacToe/assets/computer\.webp", root\)\);\nawait assert\.rejects\(access\(new URL\("public/iNoiizY/TicTacToe/assets/ai\.webp", root\)\)\);',
+              '\nassert.doesNotMatch(js, /\\.\\/assets\\//);\nassert.doesNotMatch(css, /\\.\\/assets\\//);\nassert.match(js, /https:\\/\\/[^"\\s]+/);\nassert.match(css, /https:\\/\\/[^"\\s]+/);',
+              test
           )
           test_path.write_text(test)
+
+          shutil.rmtree("public/iNoiizY/TicTacToe/assets", ignore_errors=True)
+          Path(".upload-trigger").unlink(missing_ok=True)
+          Path(".github/workflows/finish-upload.yml").unlink(missing_ok=True)
+
+          print("background", slots["background"]["direct"])
+          print("player", slots["player"]["direct"])
+          print("computer", slots["computer"]["direct"])
           PY
-
-          rm -rf public/iNoiizY/TicTacToe/assets
-          rm -f .upload-trigger
-          rm .github/workflows/finish-upload.yml
           rmdir .github/workflows .github 2>/dev/null || true
-
       - name: Check
         shell: bash
         run: |
           npm install
           npm run check
-
       - name: Commit
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Use external image hosting"
+          git commit -m "Use hosted images"
           git push origin main
