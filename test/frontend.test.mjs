@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
@@ -59,7 +59,9 @@ assert.doesNotMatch(code, /\/\*/);
 assert.doesNotMatch(html, /<!--/);
 assert.doesNotMatch(projectText, /\b(?:AI|KI)\b|Künstliche|ChatGPT|OpenAI/i);
 
-await access(new URL("public/iNoiizY/TicTacToe/assets/computer.webp", root));
-await assert.rejects(access(new URL("public/iNoiizY/TicTacToe/assets/ai.webp", root)));
+assert.doesNotMatch(js, /\.\/assets\//);
+assert.doesNotMatch(css, /\.\/assets\//);
+assert.match(js, /https:\/\/[^"\s]+/);
+assert.match(css, /https:\/\/[^"\s]+/);
 
 console.log("Frontend-Prüfungen erfolgreich.");

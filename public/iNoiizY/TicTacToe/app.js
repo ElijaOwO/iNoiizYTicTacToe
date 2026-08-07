@@ -265,9 +265,9 @@ function createToken(value) {
   const image = document.createElement("img");
 
   if (owner === PLAYER) {
-    image.src = "./assets/player.webp";
+    image.src = "https://i.ibb.co/B5gsPGZj/player.webp";
   } else {
-    image.src = "./assets/computer.webp";
+    image.src = "https://i.ibb.co/3ypsGR4J/computer.webp";
   }
 
   if (mode === MODE_LOCAL) {
