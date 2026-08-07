@@ -21,6 +21,7 @@ jobs:
           curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/background.webp --output public/iNoiizY/TicTacToe/assets/background.webp
           curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/computer.webp --output public/iNoiizY/TicTacToe/assets/computer.webp
           curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/player.webp --output public/iNoiizY/TicTacToe/assets/player.webp
+          rm -f .upload-trigger
           rm .github/workflows/finish-upload.yml
           rmdir .github/workflows .github 2>/dev/null || true
       - name: Commit
