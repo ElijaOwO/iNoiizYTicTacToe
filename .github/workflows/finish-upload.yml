@@ -1,4 +1,4 @@
-name: Finish project upload
+name: Finish image migration
 
 on:
   push:
@@ -13,22 +13,121 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Add assets
+      - name: Move images
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p public/iNoiizY/TicTacToe/assets
-          curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/background.webp --output public/iNoiizY/TicTacToe/assets/background.webp
-          curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/computer.webp --output public/iNoiizY/TicTacToe/assets/computer.webp
-          curl --fail --location --silent --show-error https://elija.me/iNoiizY/TicTacToe/assets/player.webp --output public/iNoiizY/TicTacToe/assets/player.webp
+
+          download_image() {
+            file="$1"
+            shift
+            for url in "$@"; do
+              if curl --fail --location --silent --show-error "$url" --output "/tmp/$file"; then
+                return 0
+              fi
+            done
+            echo "Could not download $file" >&2
+            exit 1
+          }
+
+          download_image background.webp \
+            "https://elija.me/iNoiizY/TicTacToe/assets/background.webp" \
+            "https://elija.me/iNoiizY/TicTacToe/background.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/assets/background.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/background.webp"
+
+          download_image player.webp \
+            "https://elija.me/iNoiizY/TicTacToe/assets/player.webp" \
+            "https://elija.me/iNoiizY/TicTacToe/player.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/assets/player.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/player.webp"
+
+          download_image computer.webp \
+            "https://elija.me/iNoiizY/TicTacToe/assets/computer.webp" \
+            "https://elija.me/iNoiizY/TicTacToe/computer.webp" \
+            "https://elija.me/iNoiizY/TicTacToe/assets/ai.webp" \
+            "https://elija.me/iNoiizY/TicTacToe/ai.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/assets/computer.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/computer.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/assets/ai.webp" \
+            "https://elija.me/iNoiizy/TicTacToe/ai.webp"
+
+          upload_image() {
+            curl --fail --silent --show-error \
+              -F "reqtype=fileupload" \
+              -F "fileToUpload=@/tmp/$1" \
+              https://catbox.moe/user/api.php
+          }
+
+          BG_URL="$(upload_image background.webp)"
+          PLAYER_URL="$(upload_image player.webp)"
+          COMPUTER_URL="$(upload_image computer.webp)"
+
+          for url in "$BG_URL" "$PLAYER_URL" "$COMPUTER_URL"; do
+            case "$url" in
+              https://files.catbox.moe/*) ;;
+              *) echo "Unexpected upload result: $url" >&2; exit 1 ;;
+            esac
+          done
+
+          export BG_URL PLAYER_URL COMPUTER_URL
+
+          python3 <<'PY'
+          import os
+          from pathlib import Path
+
+          root = Path("public/iNoiizY/TicTacToe")
+          app_path = root / "app.js"
+          css_path = root / "styles.css"
+          headers_path = Path("public/_headers")
+          test_path = Path("test/frontend.test.mjs")
+
+          app = app_path.read_text()
+          app = app.replace('"./assets/player.webp"', f'"{os.environ["PLAYER_URL"]}"')
+          app = app.replace('"./assets/computer.webp"', f'"{os.environ["COMPUTER_URL"]}"')
+          app_path.write_text(app)
+
+          css = css_path.read_text()
+          css = css.replace('url("./assets/background.webp")', f'url("{os.environ["BG_URL"]}")')
+          css_path.write_text(css)
+
+          headers = headers_path.read_text()
+          headers = headers.replace(
+              "img-src 'self' data:;",
+              "img-src 'self' https://files.catbox.moe data:;"
+          )
+          headers_path.write_text(headers)
+
+          test = test_path.read_text()
+          test = test.replace(
+              'import { access, readFile } from "node:fs/promises";',
+              'import { readFile } from "node:fs/promises";'
+          )
+          test = test.replace(
+              'await access(new URL("public/iNoiizY/TicTacToe/assets/computer.webp", root));\n'
+              'await assert.rejects(access(new URL("public/iNoiizY/TicTacToe/assets/ai.webp", root)));',
+              'assert.match(js, /https:\\/\\/files\\.catbox\\.moe\\/[A-Za-z0-9]+\\.webp/);\n'
+              'assert.match(css, /https:\\/\\/files\\.catbox\\.moe\\/[A-Za-z0-9]+\\.webp/);'
+          )
+          test_path.write_text(test)
+          PY
+
+          rm -rf public/iNoiizY/TicTacToe/assets
           rm -f .upload-trigger
           rm .github/workflows/finish-upload.yml
           rmdir .github/workflows .github 2>/dev/null || true
+
+      - name: Check
+        shell: bash
+        run: |
+          npm install
+          npm run check
+
       - name: Commit
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Add image assets"
+          git commit -m "Use external image hosting"
           git push origin main
