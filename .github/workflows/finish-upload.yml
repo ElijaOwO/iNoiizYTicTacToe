@@ -14,10 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update image links
+
+      - name: Resolve ImgBB links and update project
         shell: bash
         run: |
           set -euo pipefail
+
           python3 <<'PY'
           import html
           import re
@@ -32,30 +34,35 @@ jobs:
               "computer": "https://ibb.co/Y7cWY0Pr",
           }
 
-          def direct_image(page):
-              request = urllib.request.Request(page, headers={"User-Agent": "Mozilla/5.0"})
+          def read_page(url):
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "User-Agent": "Mozilla/5.0",
+                      "Accept": "text/html,application/xhtml+xml"
+                  },
+              )
               with urllib.request.urlopen(request, timeout=30) as response:
-                  text = response.read().decode("utf-8", "replace")
+                  return response.read().decode("utf-8", "replace")
 
+          def direct_image(page):
+              text = read_page(page)
               patterns = [
                   r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
                   r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
                   r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
+                  r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)',
               ]
-
               for pattern in patterns:
                   match = re.search(pattern, text, re.I)
                   if match:
-                      return html.unescape(match.group(1))
-
-              raise RuntimeError(f"Kein Bildlink auf {page} gefunden")
+                      url = html.unescape(match.group(1)).strip()
+                      parts = urllib.parse.urlsplit(url)
+                      if parts.scheme == "https" and parts.netloc:
+                          return url
+              raise RuntimeError(f"Kein direkter Bildlink gefunden: {page}")
 
           images = {name: direct_image(page) for name, page in pages.items()}
-
-          for url in images.values():
-              parts = urllib.parse.urlsplit(url)
-              if parts.scheme != "https" or not parts.netloc:
-                  raise RuntimeError(f"Ungültiger Bildlink: {url}")
 
           app_path = Path("public/iNoiizY/TicTacToe/app.js")
           css_path = Path("public/iNoiizY/TicTacToe/styles.css")
@@ -66,13 +73,13 @@ jobs:
           app = app.replace('"./assets/player.webp"', f'"{images["player"]}"')
           app = app.replace('"./assets/computer.webp"', f'"{images["computer"]}"')
           if "./assets/player.webp" in app or "./assets/computer.webp" in app:
-              raise RuntimeError("Bildpfade in app.js konnten nicht ersetzt werden")
+              raise RuntimeError("Lokale Spielstein-Bildpfade sind noch vorhanden")
           app_path.write_text(app)
 
           css = css_path.read_text()
           css = css.replace('url("./assets/background.webp")', f'url("{images["background"]}")')
           if "./assets/background.webp" in css:
-              raise RuntimeError("Hintergrundpfad konnte nicht ersetzt werden")
+              raise RuntimeError("Lokaler Hintergrundpfad ist noch vorhanden")
           css_path.write_text(css)
 
           origins = sorted({
@@ -80,8 +87,10 @@ jobs:
               for url in images.values()
           })
           headers = headers_path.read_text()
-          image_sources = " ".join(origins)
-          headers = headers.replace("img-src 'self' data:;", f"img-src 'self' {image_sources} data:;")
+          old_csp = "img-src 'self' data:;"
+          new_csp = f"img-src 'self' {' '.join(origins)} data:;"
+          if old_csp in headers:
+              headers = headers.replace(old_csp, new_csp)
           headers_path.write_text(headers)
 
           test = test_path.read_text()
@@ -89,32 +98,39 @@ jobs:
               'import { access, readFile } from "node:fs/promises";',
               'import { readFile } from "node:fs/promises";'
           )
-          test = re.sub(
-              r'\nawait access\(new URL\("public/iNoiizY/TicTacToe/assets/computer\.webp", root\)\);\nawait assert\.rejects\(access\(new URL\("public/iNoiizY/TicTacToe/assets/ai\.webp", root\)\)\);',
-              '\nassert.doesNotMatch(js, /\\.\\/assets\\//);\nassert.doesNotMatch(css, /\\.\\/assets\\//);\nassert.match(js, /https:\\/\\/[^"\\s]+/);\nassert.match(css, /https:\\/\\/[^"\\s]+/);',
-              test
-          )
+          old_checks = '''await access(new URL("public/iNoiizY/TicTacToe/assets/computer.webp", root));
+          await assert.rejects(access(new URL("public/iNoiizY/TicTacToe/assets/ai.webp", root)));'''.replace("          ", "")
+          new_checks = '''assert.doesNotMatch(js, /\.\/assets\//);
+          assert.doesNotMatch(css, /\.\/assets\//);
+          assert.match(js, /https:\/\/[^"\s]+/);
+          assert.match(css, /https:\/\/[^"\s]+/);'''.replace("          ", "")
+          test = test.replace(old_checks, new_checks)
           test_path.write_text(test)
 
           shutil.rmtree("public/iNoiizY/TicTacToe/assets", ignore_errors=True)
           Path(".upload-trigger").unlink(missing_ok=True)
-          Path(".github/workflows/finish-upload.yml").unlink(missing_ok=True)
 
           print("background:", images["background"])
           print("player:", images["player"])
           print("computer:", images["computer"])
           PY
-          rmdir .github/workflows .github 2>/dev/null || true
+
       - name: Check
         shell: bash
         run: |
           npm install --package-lock=false
           npm run check
-      - name: Commit
+
+      - name: Commit website changes
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add public test .upload-trigger 2>/dev/null || true
+          git add -u public test .upload-trigger 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No website changes to commit"
+            exit 0
+          fi
           git commit -m "Use hosted images"
           git push origin main
